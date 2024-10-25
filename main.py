@@ -1,90 +1,75 @@
+import datetime
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
-import os
-from datetime import datetime, timezone
+import os.path
 
-# Define the required scope to access Google Calendar API
+# Set up OAuth scopes
 SCOPES = ['https://www.googleapis.com/auth/calendar']
+value = ""
 
 def authenticate_google_calendar():
+    """Authenticates the user and returns a Google Calendar API service object."""
     creds = None
-
-    # Check if token.json already exists
     if os.path.exists('token.json'):
         creds = Credentials.from_authorized_user_file('token.json', SCOPES)
-
-    # If no valid credentials are available, prompt the user to log in
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            # Run OAuth flow to generate token.json
             flow = InstalledAppFlow.from_client_secrets_file('credentials.json', SCOPES)
             creds = flow.run_local_server(port=0)
-
-        # Save the credentials to token.json for future use
-        with open('token.json', 'w') as token_file:
-            token_file.write(creds.to_json())
-
-    # Build the Google Calendar API service
+        with open('token.json', 'w') as token:
+            token.write(creds.to_json())
     service = build('calendar', 'v3', credentials=creds)
     return service
 
-def list_events(service):
-    with open('output.txt', 'w') as outputFile:
-        """Lists all upcoming events."""
+def fetch_and_delete_events(service):
+    """Fetches events for the next year (including deleted) and deletes those that start with 'ELEC'."""
+    # Open output.txt with UTF-8 encoding to support all Unicode characters
+    with open('output.txt', 'w', encoding='utf-8') as output_file:
         calendars = service.calendarList().list().execute().get('items', [])
-        now = datetime.now(timezone.utc).isoformat()
-
+        
+        # Get current time and one year from now in RFC3339 format
+        now = datetime.datetime.utcnow().isoformat() + 'Z'
+        one_year_later = (datetime.datetime.utcnow() + datetime.timedelta(days=365)).isoformat() + 'Z'
+        
         for calendar in calendars:
             calendar_id = calendar['id']
-
-            # Get events from the primary calendar starting from the current time
+            output_file.write(f'\nChecking calendar: {calendar["summary"]}\n')
+            
+            # Fetch events within the next year, including deleted ones
             events_result = service.events().list(
-                calendarId=calendar_id, timeMin=now #, singleEvents=True
+                calendarId=calendar_id,
+                maxResults=2500,
+                showDeleted=True,      # Include deleted events in the results
+                singleEvents=True,     # Expand recurring events to individual instances
+                timeMin=now,           # Start time for events (now)
+                timeMax=one_year_later # End time for events (one year later)
             ).execute()
+            
             events = events_result.get('items', [])
-            outputFile.write(f"Accessing Calendar: {calendar['summary']}")
-
+            
             if not events:
-                outputFile.write(f'No upcoming events found in calendar: {calendar["summary"]}')
+                output_file.write(f'No events found in calendar: {calendar["summary"]}\n')
                 continue
-
-            # Print event summaries and IDs for debugging
+            
             for event in events:
-                outputFile.write(event['summary'])
-                # if event['summary'].startswith('ELEC'):
-                #     print(f"Event: {event['summary']} ({event['id']}) in calendar {calendar['summary']}")
-                outputFile.write("---")
+                # Log each event's summary and ID
+                # output_file.write(f"Event: {event.get('summary', 'No Title')} (ID: {event['id']})\n")
+                
+                # Check if event summary starts with 'ELEC'
+                if event.get('summary', '').startswith(value):
+                    output_file.write(f"Deleting event: {event['summary']} (ID: {event['id']}) in calendar {calendar['summary']}\n")
+                    service.events().delete(calendarId=calendar_id, eventId=event['id']).execute()
 
-# def delete_events(service):
-#     # Set the current time in RFC3339 format for retrieving future events
-#     now = datetime.now(timezone.utc).isoformat()  # Updated to use timezone-aware datetime
 
-#     # Get events from the primary calendar starting from the current time
-#     events_result = service.events().list(
-#         calendarId='primary', timeMin=now, singleEvents=True
-#     ).execute()
-#     events = events_result.get('items', [])
-
-#     if not events:
-#         print('No upcoming events found.')
-#         return
-
-#     # Delete events that start with "ELEC"
-#     for event in events:
-#         if event['summary'].startswith('ELEC'):
-#             print(f"Deleting event: {event['summary']} ({event['id']})")
-#             service.events().delete(calendarId='primary', eventId=event['id']).execute()
 
 def main():
-    # Authenticate and build the service
+    value = input("Enter the event starting key:")
     service = authenticate_google_calendar()
-    # Delete specific events
-    # delete_events(service)
-    list_events(service)
+    fetch_and_delete_events(service)
 
 if __name__ == '__main__':
     main()
