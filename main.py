@@ -26,7 +26,6 @@ def authenticate_google_calendar():
     return service
 
 def fetch_and_delete_events(service):
-    """Fetches events for the next year (including deleted) and deletes those that start with 'ELEC'."""
     # Open output.txt with UTF-8 encoding to support all Unicode characters
     with open('output.txt', 'w', encoding='utf-8') as output_file:
         calendars = service.calendarList().list().execute().get('items', [])
@@ -67,7 +66,7 @@ def fetch_and_delete_events(service):
 
 
 def main():
-    value = input("Enter the event starting key:")
+    value = input("Enter the event starting key: ")
     service = authenticate_google_calendar()
     fetch_and_delete_events(service)
 
