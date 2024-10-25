@@ -35,7 +35,7 @@ This is specifically useful for mass deleting events.
 3. The program will fetch events from your calendar, and if any events start with the specified prefix, they will be deleted. All actions will be logged in `output.txt`.
 
 ## Licence
-This prokect is licensed under the MIT License - see the LICESE file for details
+This project is licensed under the MIT License - see the LICESE file for details
 
 ## Contributing
 Feel free to contribute by creating a pull request or opening an issue.
